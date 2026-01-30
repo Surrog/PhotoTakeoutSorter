@@ -1,5 +1,4 @@
 import argparse
-import os
 from pathlib import Path
 import json
 from PIL import Image
@@ -7,6 +6,8 @@ from PIL.ExifTags import TAGS
 from typing import List, Set, Dict, Tuple
 from datetime import datetime
 from pillow_heif import register_heif_opener
+import piexif
+import time
 
 register_heif_opener()
 Image.MAX_IMAGE_PIXELS = None  # Disable DecompressionBombError
@@ -65,22 +66,48 @@ def compute_supplemental_metadata_path_nosuffix(path: Path) -> Path:
     json_path = updated_name_path.with_suffix('.json')
     return json_path
 
-
-def fetch_datetime_metadata(path: Path) -> datetime:
+def fetch_datetime_from_exif(path: Path) -> datetime:
     img = Image.open(path)
     metadata = img.getexif()
     for tag_id, value in metadata.items():
         tag = TAGS.get(tag_id, tag_id)
         if tag == "DateTimeOriginal" or tag == "DateTime":
-            return datetime.strptime(value, "%Y:%m:%d %H:%M:%S")
+            if ' ' in value:
+                return datetime.strptime(value, "%Y:%m:%d %H:%M:%S")
+            else:
+                ts = int(value)
+                if ts > time.time():
+                    return datetime.fromtimestamp(ts / 1000)
+                return datetime.fromtimestamp(ts)
 
+    if 'exif' not in img.info:
+        print(f"{path} No exif data found: {img.info.keys()}")
+        return None
+    metadata = piexif.load(img.info['exif'])
+    if "Exif" not in metadata:
+        print(f"{path} No Exif metadata found: {metadata.keys()}")
+
+        return None
+    
+    if piexif.ExifIFD.DateTimeOriginal in metadata["Exif"]:
+            return datetime.strptime(metadata["Exif"][piexif.ExifIFD.DateTimeOriginal].decode('utf-8'), "%Y:%m:%d %H:%M:%S")
+    if piexif.ExifIFD.DateTimeDigitized in metadata["Exif"]:
+            return datetime.strptime(metadata["Exif"][piexif.ExifIFD.DateTimeDigitized].decode('utf-8'), "%Y:%m:%d %H:%M:%S")
+        
+    return None
+
+def fetch_datetime_metadata(path: Path) -> datetime:
+    dt = fetch_datetime_from_exif(path)
+    if dt is not None:
+        return dt
+    
     json_path = compute_supplemental_metadata_path_suffix(path)
     if not json_path.exists():
-        print(f"{json_path} No sidecar json found try nosuffix")
+        print(f"{path} => {json_path} No sidecar json found try nosuffix")
         json_path = compute_supplemental_metadata_path_nosuffix(path)
 
     if not json_path.exists():
-        print(f"{json_path} No sidecar json found")
+        print(f"{path} => {json_path} No sidecar json found")
         raise FileNotFoundError
 
     with open(json_path, 'r', encoding='utf-8') as json_file:
