@@ -16,16 +16,16 @@ image_extensions = {'.jpg', '.jpeg', '.png', '.bmp', '.tiff', '.heic'}
 def is_edited_image(path: Path) -> bool:
     return "-edited" in path.stem
 
-def base_image_name(path: Path) -> Tuple[str, bool]:
+def base_image_path(path: Path) -> Tuple[Path, bool]:
     if is_edited_image(path):
-        return path.stem.replace("-edited", "") + path.suffix, True
-    return path.name, False
+        return path.with_stem(path.stem.replace("-edited", "")), True
+    return path, False
 
 def keep_edited_image(paths: List[Path], keep_edited: bool) -> Set[Path]:
     img_to_keep: Dict[Path, Path] = {}
 
     for path in paths:
-        base_image, is_edited = base_image_name(path)
+        base_image, is_edited = base_image_path(path)
         current = img_to_keep.get(base_image)
         if current is None:
             img_to_keep[base_image] = path
@@ -37,12 +37,34 @@ def keep_edited_image(paths: List[Path], keep_edited: bool) -> Set[Path]:
 
     return set(img_to_keep.values())
 
-def compute_supplemental_metadata_path(path: Path) -> Path:
-    base_path, _ = base_image_name(path)
-    base_path = path.with_stem((base_path + ".supplemental-metadata"))
-    json_path = base_path.with_suffix('.json')
+def compute_supplemental_metadata_path_suffix(path: Path) -> Path:
+    base_path, _ = base_image_path(path)
+    numbered = None
+    for i in range(1, 100):
+        suffix = f"({i})"
+        if suffix in base_path.stem:
+            numbered = suffix
+            base_path = base_path.with_stem(base_path.stem.replace(suffix, "")) 
+            break
+    updated_name_path = path.with_stem((base_path.name + ".supplemental-metadata" + (numbered if numbered else "")))
+    json_path = updated_name_path.with_suffix('.json')
     json_path = json_path.with_stem(json_path.stem[:46])
     return json_path
+
+def compute_supplemental_metadata_path_nosuffix(path: Path) -> Path:
+    base_path, _ = base_image_path(path)
+    numbered = None
+    for i in range(1, 100):
+        suffix = f"({i})"
+        if suffix in base_path.stem:
+            numbered = suffix
+            base_path = base_path.with_stem(base_path.stem.replace(suffix, "")) 
+            break
+    updated_name_path = path.with_stem((base_path.stem + ".supplemental-metadata" + (numbered if numbered else "")))
+    json_path = updated_name_path.with_suffix('.json')
+    json_path = json_path.with_stem(json_path.stem[:46])
+    return json_path
+
 
 def fetch_datetime_metadata(path: Path) -> datetime:
     st = os.stat(path)
@@ -54,22 +76,24 @@ def fetch_datetime_metadata(path: Path) -> datetime:
         if tag == "DateTimeOriginal" or tag == "DateTime":
             return datetime.strptime(value, "%Y:%m:%d %H:%M:%S")
 
-    json_path = compute_supplemental_metadata_path(path)
+    json_path = compute_supplemental_metadata_path_suffix(path)
+    if not json_path.exists():
+        json_path = compute_supplemental_metadata_path_nosuffix(path)
+        
     if not json_path.exists():
         print(f"{json_path} No sidecar json found")
         raise FileNotFoundError
 
-    with open(json_path, 'r') as json_file:
-        data = json.load(json_file)
-        if 'DateTimeOriginal' in data:
-            return datetime.strptime(data['DateTimeOriginal'], "%Y:%m:%d %H:%M:%S")
-        elif 'DateTime' in data:
-            return datetime.strptime(data['DateTime'], "%Y:%m:%d %H:%M:%S")
-        elif 'photoTakenTime' in data:
-            return datetime.fromtimestamp(int(data['photoTakenTime']['timestamp']))
-        elif 'creationTime' in data:
-            return datetime.fromtimestamp(int(data['creationTime']['timestamp']))
-        print(f"{json_path} No DateTime found in sidecar json")
+    with open(json_path, 'r', encoding='utf-8') as json_file:
+        try:
+            data = json.load(json_file)
+            if 'photoTakenTime' in data:
+                return datetime.fromtimestamp(int(data['photoTakenTime']['timestamp']))
+            elif 'creationTime' in data:
+                return datetime.fromtimestamp(int(data['creationTime']['timestamp']))
+            print(f"{json_path} No DateTime found in sidecar json")
+        except Exception as e:
+            print(f"{json_path} Error decoding JSON: {e}")
         raise KeyError
 
 
