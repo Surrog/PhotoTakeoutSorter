@@ -39,36 +39,34 @@ def keep_edited_image(paths: List[Path], keep_edited: bool) -> Set[Path]:
 
 def compute_supplemental_metadata_path_suffix(path: Path) -> Path:
     base_path, _ = base_image_path(path)
-    numbered = None
+    numbered = ""
     for i in range(1, 100):
         suffix = f"({i})"
         if suffix in base_path.stem:
             numbered = suffix
             base_path = base_path.with_stem(base_path.stem.replace(suffix, "")) 
             break
-    updated_name_path = path.with_stem((base_path.name + ".supplemental-metadata" + (numbered if numbered else "")))
+    new_stem = base_path.name + ".supplemental-metadata"
+    updated_name_path = path.with_stem(new_stem[:46] + numbered)
     json_path = updated_name_path.with_suffix('.json')
-    json_path = json_path.with_stem(json_path.stem[:46])
     return json_path
 
 def compute_supplemental_metadata_path_nosuffix(path: Path) -> Path:
     base_path, _ = base_image_path(path)
-    numbered = None
+    numbered = ""
     for i in range(1, 100):
         suffix = f"({i})"
         if suffix in base_path.stem:
             numbered = suffix
             base_path = base_path.with_stem(base_path.stem.replace(suffix, "")) 
             break
-    updated_name_path = path.with_stem((base_path.stem + ".supplemental-metadata" + (numbered if numbered else "")))
+    new_stem = base_path.stem + ".supplemental-metadata"
+    updated_name_path = path.with_stem(new_stem[:46] + numbered)
     json_path = updated_name_path.with_suffix('.json')
-    json_path = json_path.with_stem(json_path.stem[:46])
     return json_path
 
 
 def fetch_datetime_metadata(path: Path) -> datetime:
-    st = os.stat(path)
-    st.st_size
     img = Image.open(path)
     metadata = img.getexif()
     for tag_id, value in metadata.items():
@@ -78,8 +76,9 @@ def fetch_datetime_metadata(path: Path) -> datetime:
 
     json_path = compute_supplemental_metadata_path_suffix(path)
     if not json_path.exists():
+        print(f"{json_path} No sidecar json found try nosuffix")
         json_path = compute_supplemental_metadata_path_nosuffix(path)
-        
+
     if not json_path.exists():
         print(f"{json_path} No sidecar json found")
         raise FileNotFoundError

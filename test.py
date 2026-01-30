@@ -23,6 +23,10 @@ def test_compute_supplemental_metadata_path():
     expected5 = Path("2021-08-08T15_36_24+02_00.JPEG.supplemental-me.json")
     assert compute_supplemental_metadata_path_suffix(path5) == expected5
 
+    path6 = Path("IMG_20131124_115016-edited(1).jpg")
+    expected6 = Path("IMG_20131124_115016.jpg.supplemental-metadata(1).json")
+    assert compute_supplemental_metadata_path_suffix(path6) == expected6
+
     path1 = Path("photo-edited.jpg")
     expected1 = Path("photo.supplemental-metadata.json")
     assert compute_supplemental_metadata_path_nosuffix(path1) == expected1
