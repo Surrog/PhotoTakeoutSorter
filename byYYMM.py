@@ -73,7 +73,7 @@ def fetch_datetime_metadata(path: Path) -> datetime:
         raise KeyError
 
 
-def process_directory(directory: Path, keep_edited: bool, target: Path):
+def process_directory(directory: Path, keep_edited: bool, target: Path, dryrun: bool = False):
     img_path: List[Path] = []
     for file_path in directory.iterdir():
         if file_path.is_file():
@@ -94,9 +94,14 @@ def process_directory(directory: Path, keep_edited: bool, target: Path):
         target_dir = target / f"{year:04d}/{month:02d}"
         target_dir.mkdir(parents=True, exist_ok=True)
         target_path = target_dir / path.name
-        print(f"Moving {path} to {target_path}")
-        #os.rename(path, target_path)
-
+        duplicate_index = 1
+        while target_path.exists():
+            target_path = target_path.with_stem(f"{target_path.stem}_{duplicate_index}")
+            duplicate_index += 1
+        if dryrun:
+            print(f"Moving {path} to {target_path}")
+        else:
+            path.rename(target_path)
 
 
 def main():
@@ -104,6 +109,7 @@ def main():
     parser.add_argument("directory", type=str, help="Directory path to iterate through")
     parser.add_argument("target", type=str, help="output directory path")
     parser.add_argument("--edited", action="store_true", help="keep edited image")
+    parser.add_argument("--dryrun", action="store_true", help="do not actually move files")
     
     args = parser.parse_args()
     
