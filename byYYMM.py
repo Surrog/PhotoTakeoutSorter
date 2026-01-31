@@ -74,19 +74,16 @@ def fetch_datetime_from_exif(path: Path) -> datetime:
         if tag == "DateTimeOriginal" or tag == "DateTime":
             if ' ' in value:
                 return datetime.strptime(value, "%Y:%m:%d %H:%M:%S")
-            else:
+            elif value.isdigit():
                 ts = int(value)
                 if ts > time.time():
                     return datetime.fromtimestamp(ts / 1000)
                 return datetime.fromtimestamp(ts)
 
     if 'exif' not in img.info:
-        print(f"{path} No exif data found: {img.info.keys()}")
         return None
     metadata = piexif.load(img.info['exif'])
     if "Exif" not in metadata:
-        print(f"{path} No Exif metadata found: {metadata.keys()}")
-
         return None
     
     if piexif.ExifIFD.DateTimeOriginal in metadata["Exif"]:
@@ -121,7 +118,6 @@ def fetch_datetime_metadata(path: Path) -> datetime:
         except Exception as e:
             print(f"{json_path} Error decoding JSON: {e}")
         raise KeyError
-
 
 def process_directory(directory: Path, keep_edited: bool, target: Path, dryrun: bool = False):
     img_path: List[Path] = []
