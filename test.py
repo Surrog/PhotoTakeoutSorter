@@ -1,5 +1,5 @@
 import pytest
-from byYYMM import compute_supplemental_metadata_path_suffix, compute_supplemental_metadata_path_nosuffix, keep_edited_image, base_image_path, is_edited_image
+from byYYMM import compute_supplemental_metadata_path_suffix, compute_supplemental_metadata_path_nosuffix, keep_edited_image, base_image_path, is_edited_image, image_looks_the_same
 from pathlib import Path
 
 def test_compute_supplemental_metadata_path():
@@ -56,18 +56,30 @@ def test_keep_edited_image():
         Path("picture.jpeg"),
     }
 
-    kept_edited = keep_edited_image(paths, keep_edited=True)
+    kept_edited, deleted = keep_edited_image(paths, keep_edited=True)
+    print("Kept edited:", kept_edited)
+    print("Deleted:", deleted)
     assert kept_edited == {
         Path("photo-edited.jpg"),
         Path("image-edited.png"),
         Path("picture.jpeg"),
     }
 
-    kept_original = keep_edited_image(paths, keep_edited=False)
+    assert deleted == {
+        Path("photo.jpg"),
+        Path("image.png"),
+    }
+
+    kept_original, deleted = keep_edited_image(paths, keep_edited=False)
     assert kept_original == {
         Path("photo.jpg"),
         Path("image.png"),
         Path("picture.jpeg"),
+    }
+
+    assert deleted == {
+        Path("photo-edited.jpg"),
+        Path("image-edited.png"),
     }
 
     paths = {
@@ -76,11 +88,13 @@ def test_keep_edited_image():
         Path("picture.jpeg"),
     }
 
-    kept_edited = keep_edited_image(paths, keep_edited=True)
+    kept_edited, deleted = keep_edited_image(paths, keep_edited=True)
     assert kept_edited == paths
+    assert deleted == set()
 
-    kept_original = keep_edited_image(paths, keep_edited=False)
+    kept_original, deleted = keep_edited_image(paths, keep_edited=False)
     assert kept_original == paths
+    assert deleted == set()
 
 def test_base_image_path():
     path1 = Path("photo-edited.jpg")

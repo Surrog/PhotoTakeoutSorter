@@ -22,8 +22,9 @@ def base_image_path(path: Path) -> Tuple[Path, bool]:
         return path.with_stem(path.stem.replace("-edited", "")), True
     return path, False
 
-def keep_edited_image(paths: List[Path], keep_edited: bool) -> Set[Path]:
+def keep_edited_image(paths: List[Path], keep_edited: bool) -> Tuple[Set[Path], Set[Path]]:
     img_to_keep: Dict[Path, Path] = {}
+    img_to_delete: Set[Path] = set()
 
     for path in paths:
         base_image, is_edited = base_image_path(path)
@@ -32,11 +33,21 @@ def keep_edited_image(paths: List[Path], keep_edited: bool) -> Set[Path]:
             img_to_keep[base_image] = path
         else:
             if keep_edited and is_edited and not is_edited_image(current):
+                img_to_delete.add(current)
                 img_to_keep[base_image] = path
+                continue
             if not keep_edited and not is_edited and is_edited_image(current):
+                img_to_delete.add(current)
                 img_to_keep[base_image] = path
+                continue
+            img_to_delete.add(path)
 
-    return set(img_to_keep.values())
+    return set(img_to_keep.values()), img_to_delete
+
+def image_looks_the_same(path1: Path, path2: Path) -> bool:
+    img1 = Image.open(path1)
+    img2 = Image.open(path2)
+    return img1.size == img2.size and fetch_datetime_from_exif(path1) == fetch_datetime_from_exif(path2)
 
 def compute_supplemental_metadata_path_suffix(path: Path) -> Path:
     base_path, _ = base_image_path(path)
@@ -68,17 +79,6 @@ def compute_supplemental_metadata_path_nosuffix(path: Path) -> Path:
 
 def fetch_datetime_from_exif(path: Path) -> datetime:
     img = Image.open(path)
-    metadata = img.getexif()
-    for tag_id, value in metadata.items():
-        tag = TAGS.get(tag_id, tag_id)
-        if tag == "DateTimeOriginal" or tag == "DateTime":
-            if ' ' in value:
-                return datetime.strptime(value, "%Y:%m:%d %H:%M:%S")
-            elif value.isdigit():
-                ts = int(value)
-                if ts > time.time():
-                    return datetime.fromtimestamp(ts / 1000)
-                return datetime.fromtimestamp(ts)
 
     if 'exif' not in img.info:
         return None
@@ -91,6 +91,17 @@ def fetch_datetime_from_exif(path: Path) -> datetime:
     if piexif.ExifIFD.DateTimeDigitized in metadata["Exif"]:
             return datetime.strptime(metadata["Exif"][piexif.ExifIFD.DateTimeDigitized].decode('utf-8'), "%Y:%m:%d %H:%M:%S")
         
+    metadata = img.getexif()
+    for tag_id, value in metadata.items():
+        tag = TAGS.get(tag_id, tag_id)
+        if tag == "DateTimeOriginal" or tag == "DateTime":
+            if ' ' in value:
+                return datetime.strptime(value, "%Y:%m:%d %H:%M:%S")
+            elif value.isdigit():
+                ts = int(value)
+                if ts > time.time():
+                    return datetime.fromtimestamp(ts / 1000)
+                return datetime.fromtimestamp(ts)   
     return None
 
 def fetch_datetime_metadata(path: Path) -> datetime:
@@ -128,7 +139,7 @@ def process_directory(directory: Path, keep_edited: bool, target: Path, dryrun: 
         if file_path.is_dir():
             process_directory(file_path, keep_edited, target)
 
-    img_to_keep = keep_edited_image(img_path, keep_edited)
+    img_to_keep, img_to_delete = keep_edited_image(img_path, keep_edited)
 
     img_metadata: Dict[Path, datetime] = {}
     for path in img_to_keep:
@@ -140,6 +151,9 @@ def process_directory(directory: Path, keep_edited: bool, target: Path, dryrun: 
         target_dir = target / f"{year:04d}/{month:02d}"
         target_dir.mkdir(parents=True, exist_ok=True)
         target_path = target_dir / path.name
+        if target_path.exists() and image_looks_the_same(path, target_path):
+            img_to_delete.add(path)
+            continue
         duplicate_index = 1
         while target_path.exists():
             target_path = target_path.with_stem(f"{target_path.stem}_{duplicate_index}")
@@ -149,6 +163,12 @@ def process_directory(directory: Path, keep_edited: bool, target: Path, dryrun: 
         else:
             path.rename(target_path)
 
+    for path in img_to_delete:
+        if dryrun:
+            print(f"Deleting {path}")
+        else:
+            path.unlink()
+    print(f"Processed {len(img_path)} images from {directory}: kept {len(img_to_keep)} and deleted {len(img_to_delete)}")
 
 def main():
     parser = argparse.ArgumentParser(description="Iterate through files in a directory")
