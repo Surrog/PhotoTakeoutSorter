@@ -168,7 +168,7 @@ def process_directory(directory: Path, keep_edited: bool, target: Path, dryrun: 
             print(f"Deleting {path}")
         else:
             path.unlink()
-    print(f"Processed {len(img_path)} images from {directory}: kept {len(img_to_keep)} and deleted {len(img_to_delete)}")
+    print(f"Processed {len(img_path)} images from {directory}: kept {len(img_to_keep)}, found datatime for {len(img_metadata)} and deleted {len(img_to_delete)}")
 
 def main():
     parser = argparse.ArgumentParser(description="Iterate through files in a directory")
