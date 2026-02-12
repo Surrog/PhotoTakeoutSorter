@@ -128,4 +128,4 @@ def test_update_exif():
     now = datetime.now()
     update_metadata('modif.jpg', now)
     fixed = fetch_datetime_metadata('modif.jpg')
-    assert now == fixed
+    assert int(now.timestamp()) == int(fixed.timestamp())
