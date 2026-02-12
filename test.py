@@ -1,6 +1,7 @@
 import pytest
-from byYYMM import compute_supplemental_metadata_path_suffix, compute_supplemental_metadata_path_nosuffix, keep_edited_image, base_image_path, is_edited_image, image_looks_the_same
+from byYYMM import compute_supplemental_metadata_path_suffix, compute_supplemental_metadata_path_nosuffix, keep_edited_image, base_image_path, is_edited_image, update_metadata, fetch_datetime_metadata
 from pathlib import Path
+from datetime import datetime
 
 def test_compute_supplemental_metadata_path():
     path1 = Path("photo-edited.jpg")
@@ -122,3 +123,9 @@ def test_is_edited_image():
     assert is_edited_image(Path("image.png")) is False
     assert is_edited_image(Path("picture-edited(1).jpeg")) is True
     assert is_edited_image(Path("snapshot(5).heic")) is False
+
+def test_update_exif():
+    now = datetime.now()
+    update_metadata('modif.jpg', now)
+    fixed = fetch_datetime_metadata('modif.jpg')
+    assert now == fixed

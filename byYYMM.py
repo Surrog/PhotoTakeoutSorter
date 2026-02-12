@@ -130,6 +130,17 @@ def fetch_datetime_metadata(path: Path) -> datetime:
             print(f"{json_path} Error decoding JSON: {e}")
         raise KeyError
 
+def update_metadata(path: Path, dt: datetime):
+    try:
+        img = Image.open(path)
+        exif_dict = piexif.load(img.info['exif'])
+        exif_dict["Exif"][piexif.ExifIFD.DateTimeOriginal] = dt.strftime("%Y:%m:%d %H:%M:%S").encode('utf-8')
+        exif_dict["Exif"][piexif.ExifIFD.DateTimeDigitized] = dt.strftime("%Y:%m:%d %H:%M:%S").encode('utf-8')
+        exif_bytes = piexif.dump(exif_dict)
+        img.save(path, exif=exif_bytes)
+    except Exception as e:
+        print(f"Warning: Could not update metadata for {path}: {e}")
+
 def process_directory(directory: Path, keep_edited: bool, target: Path, dryrun: bool = False):
     img_path: List[Path] = []
     for file_path in directory.iterdir():
@@ -144,6 +155,7 @@ def process_directory(directory: Path, keep_edited: bool, target: Path, dryrun: 
     img_metadata: Dict[Path, datetime] = {}
     for path in img_to_keep:
         img_metadata[path] = fetch_datetime_metadata(path)
+        update_metadata(path, img_metadata[path])
 
     for path, dt in img_metadata.items():
         year = dt.year
